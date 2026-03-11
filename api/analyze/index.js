@@ -13,55 +13,49 @@ const CORS = {
 };
 
 module.exports = async function (context, req) {
-  // Handle preflight
   if (req.method === 'OPTIONS') {
     context.res = { status: 204, headers: CORS, body: '' };
     return;
   }
 
   try {
-    // req.body is a Buffer when rawBody is enabled, otherwise use req.rawBody
-    const imageBuffer = Buffer.isBuffer(req.body)
-      ? req.body
-      : Buffer.from(req.rawBody || req.body || '', 'binary');
-
-    const contentType = req.headers['content-type'] || 'image/jpeg';
-
-    if (!imageBuffer || imageBuffer.length === 0) {
+    // Frontend sends JSON: { image: "<base64>", contentType: "image/jpeg" }
+    const body = req.body;
+    if (!body || !body.image) {
       context.res = {
         status: 400, headers: CORS,
-        body: JSON.stringify({ error: 'No image data received.' })
+        body: JSON.stringify({ error: 'Missing image data in request body.' })
       };
       return;
     }
 
+    const imageBuffer = Buffer.from(body.image, 'base64');
+    const contentType = body.contentType || 'image/jpeg';
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+
     context.log(`Image received: ${imageBuffer.length} bytes, type: ${contentType}`);
 
-    // Build two FormData payloads (can't reuse same stream)
+    // Build FormData for Imagga
     const makeForm = () => {
       const fd = new FormData();
       fd.append('image', imageBuffer, {
-        filename: 'upload.jpg',
+        filename: `upload.${ext}`,
         contentType: contentType,
         knownLength: imageBuffer.length
       });
       return fd;
     };
 
-    const form1 = makeForm();
-    const form2 = makeForm();
-
-    // Fire both requests in parallel
     const [tagsRes, colorsRes] = await Promise.all([
       fetch('https://api.imagga.com/v2/tags', {
         method: 'POST',
-        headers: { Authorization: AUTH, ...form1.getHeaders() },
-        body: form1
+        headers: { Authorization: AUTH, ...makeForm().getHeaders() },
+        body: makeForm()
       }),
       fetch('https://api.imagga.com/v2/colors', {
         method: 'POST',
-        headers: { Authorization: AUTH, ...form2.getHeaders() },
-        body: form2
+        headers: { Authorization: AUTH, ...makeForm().getHeaders() },
+        body: makeForm()
       })
     ]);
 
@@ -86,7 +80,7 @@ module.exports = async function (context, req) {
     };
 
   } catch (err) {
-    context.log.error('Proxy error:', err.message);
+    context.log.error('Proxy error:', err.message, err.stack);
     context.res = {
       status: 500, headers: CORS,
       body: JSON.stringify({ error: 'Internal server error: ' + err.message })

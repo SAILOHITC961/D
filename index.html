@@ -487,10 +487,18 @@
     show('loader'); hide('results'); hide('err');
 
     try {
+      // Convert to base64 — most reliable way through Azure Functions
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
       const res = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, contentType: file.type || 'image/jpeg' })
       });
 
       if (!res.ok) {
