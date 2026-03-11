@@ -1,0 +1,13 @@
+{
+  "name": "drishti-api",
+  "version": "1.0.0",
+  "description": "Drishti AI — Azure Functions proxy for Imagga API",
+  "main": "index.js",
+  "dependencies": {
+    "node-fetch": "^2.7.0",
+    "form-data": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
